@@ -1,0 +1,2 @@
+# Milestone 1/2 diagnostic tools. Python 3.12 venv recommended.
+opencv-python>=4.9,<5

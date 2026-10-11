@@ -1,0 +1,65 @@
+# Home Assistant automation: speak a TRUSTED template chosen by message_key.
+# Paste via Settings > Automations & scenes > Create > Edit in YAML.
+#
+# Before use, replace the two placeholders (do NOT commit your real values):
+#   <WEBHOOK_ID>      the random ID from `python tools/test_announcement.py --generate-id`
+#   <ECHO_NOTIFY_ENTITY>  the real entity ID read from Developer Tools > States
+#                         (filter "notify."), e.g. the one ending in _announce or _speak.
+#
+# Incoming text is never spoken. Only message_key selects a template; person_name
+# is sanitised (Unicode word chars, space . ' - only) and truncated.
+alias: AI Home Visitor - announce
+description: Receives events from the local Python service and speaks configured templates on the Echo Dot.
+mode: queued
+max: 5
+triggers:
+  - trigger: webhook
+    webhook_id: "<WEBHOOK_ID>"
+    allowed_methods: [POST]
+    local_only: true
+variables:
+  key: "{{ trigger.json.message_key | default('') }}"
+  name: >-
+    {{ (trigger.json.person_name | default('') | string
+        | regex_replace("[^\w .'\-]", "") | truncate(40, True, "")) }}
+  # Stale-event guard: drop events older than 60 s (clock skew tolerant).
+  age_s: >-
+    {{ (now() - (trigger.json.timestamp | as_datetime)).total_seconds()
+       if trigger.json.timestamp is defined else 0 }}
+conditions:
+  # Only known message keys may result in speech.
+  - condition: template
+    value_template: >-
+      {{ key in ['test_announcement', 'front_door_recognised', 'front_door_unknown',
+                 'front_door_face_not_visible', 'welcome_home', 'camera_offline',
+                 'system_health_warning'] }}
+  # Named templates need a usable name.
+  - condition: template
+    value_template: >-
+      {{ key not in ['front_door_recognised', 'welcome_home'] or name | length > 0 }}
+  - condition: template
+    value_template: "{{ age_s | float(0) < 60 }}"
+  # Quiet hours: 22:00-07:00 suppress everything except health warnings.
+  - condition: or
+    conditions:
+      - condition: time
+        after: "07:00:00"
+        before: "22:00:00"
+      - condition: template
+        value_template: "{{ key in ['system_health_warning', 'camera_offline'] }}"
+actions:
+  - action: notify.send_message
+    target:
+      entity_id: "<ECHO_NOTIFY_ENTITY>"
+    data:
+      message: >-
+        {% set t = {
+          'test_announcement': 'This is a test announcement from the home visitor system.',
+          'front_door_recognised': name ~ ' is at the front door.',
+          'front_door_unknown': 'Unknown visitor at the front door.',
+          'front_door_face_not_visible': 'Person detected at the front door. Face not visible.',
+          'welcome_home': 'Welcome home, ' ~ name ~ '.',
+          'camera_offline': 'A camera is offline. Please check the system.',
+          'system_health_warning': 'Home visitor system health warning. Please check the dashboard.'
+        } %}
+        {{ t[key] }}

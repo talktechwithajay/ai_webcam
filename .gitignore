@@ -1,0 +1,29 @@
+# Secrets and local config
+.env
+*.local.yaml
+secrets.yaml
+
+# Personal / biometric data - NEVER commit
+data/
+*.db
+*.sqlite*
+*.enc
+snapshots/
+clips/
+faces/
+enrollment/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+
+# VM images
+*.vdi
+*.vdi.zip
