@@ -1,0 +1,61 @@
+# Copy this file to config/settings.local.yaml (git-ignored) and fill in your details.
+# NEVER commit settings.local.yaml: it holds passwords.
+
+dashboard:
+  host: 0.0.0.0          # 127.0.0.1 = this laptop only; 0.0.0.0 = reachable from your home network
+  port: 8080
+  username: admin
+  password: change-me     # REQUIRED: choose a strong password. The app refuses to start with this default.
+  session_hours: 12
+
+# --- Home Assistant -> Echo Dot -------------------------------------------------------------
+home_assistant:
+  enabled: false          # set true once the HA automation exists (docs/02-home-assistant-alexa.md)
+  base_url: http://homeassistant.local:8123
+  webhook_id: ""          # python tools/test_announcement.py --generate-id
+  timeout_seconds: 10
+
+# --- CP Plus DVR/NVR -----------------------------------------------------------------------
+# Use a VIEW-ONLY user created on the recorder, not the admin account.
+recorder:
+  host: ""                # recorder LAN IP, e.g. 192.168.1.108
+  rtsp_port: 554
+  username: ""
+  password: ""            # special characters are fine; they are URL-encoded automatically
+  # CP Plus recorders are generally Dahua OEMs. If check-cameras fails, try another template here.
+  rtsp_url_template: "rtsp://{username}:{password}@{host}:{port}/cam/realmonitor?channel={channel}&subtype={subtype}"
+
+# --- Cameras ---------------------------------------------------------------------------------
+# source: recorder | rtsp | usb | file | disabled
+#   recorder : a channel on the CP Plus recorder above
+#   rtsp     : your own full RTSP URL in rtsp_url
+#   usb      : USB webcam index in usb_index (see tools/list_cameras.py)
+#   file     : a video or image file in path (hardware-free test mode)
+# detect_subtype 1 = light sub stream used continuously; snapshot_subtype 0 = full resolution
+# stream grabbed only when a person is confirmed (better pictures and better recognition).
+# zone: optional [x1, y1, x2, y2] fractions of the frame; only faces inside count.
+cameras:
+  front_door:
+    role: front
+    source: disabled
+    channel: 1
+    detect_subtype: 1
+    snapshot_subtype: 0
+    log_cooldown_seconds: 60        # same person within this time = same visit
+    announce_cooldown_seconds: 60
+  indoor:
+    role: indoor
+    source: disabled
+    channel: 2
+    detect_subtype: 1
+    snapshot_subtype: 0
+    log_cooldown_seconds: 600
+    announce_cooldown_seconds: 1800 # "Welcome home" at most every 30 minutes per person
+
+recognition:
+  detect_score: 0.85
+  match_threshold: 0.40   # cosine similarity; higher = stricter (fewer false matches, more "unknown")
+  process_fps: 5
+  min_face_px: 70         # ignore faces smaller than this (too small to recognise reliably)
+  min_frames: 3           # a face must be seen in this many frames before it counts
+  settle_seconds: 1.5     # wait this long to pick the best frame of a person

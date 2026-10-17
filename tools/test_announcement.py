@@ -29,11 +29,13 @@ MESSAGE_KEYS = {
     "front_door_unknown",
     "front_door_face_not_visible",
     "welcome_home",
+    "custom_message",
     "camera_offline",
     "system_health_warning",
 }
 CONFIDENCE = {"high", "medium", "low", "none"}
 NAME_RE = re.compile(r"^[\w .'\-]{1,40}$", re.UNICODE)
+MESSAGE_RE = re.compile(r"^[\w .,!?:'\-]{1,200}$", re.UNICODE)
 
 
 def load_dotenv(path: Path) -> None:
@@ -46,14 +48,14 @@ def load_dotenv(path: Path) -> None:
             os.environ.setdefault(k.strip(), v.strip())
 
 
-def build_event(key: str, name: str | None, camera: str, confidence: str) -> dict:
+def build_event(key: str, name: str | None, camera: str, confidence: str, text: str | None = None) -> dict:
     if key not in MESSAGE_KEYS:
         raise ValueError(f"unknown message_key {key!r}")
     if confidence not in CONFIDENCE:
         raise ValueError(f"bad confidence {confidence!r}")
     if name is not None and not NAME_RE.match(name):
         raise ValueError("person_name must be 1-40 chars: letters, digits, space . ' -")
-    return {
+    event = {
         "event_id": str(uuid.uuid4()),
         "event_type": key,
         "person_name": name,
@@ -62,6 +64,11 @@ def build_event(key: str, name: str | None, camera: str, confidence: str) -> dic
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "message_key": key,
     }
+    if key == "custom_message":
+        if not text or not MESSAGE_RE.match(text):
+            raise ValueError("custom text must be 1-200 chars: letters, digits, space . , ! ? : ' -")
+        event["custom_text"] = text
+    return event
 
 
 def main() -> int:
@@ -69,6 +76,7 @@ def main() -> int:
     ap.add_argument("--generate-id", action="store_true")
     ap.add_argument("--key", default="test_announcement")
     ap.add_argument("--name")
+    ap.add_argument("--text", help="spoken text for --key custom_message")
     ap.add_argument("--camera", default="front_door")
     ap.add_argument("--confidence", default="none")
     ap.add_argument("--dry-run", action="store_true", help="validate and print payload, send nothing")
@@ -80,7 +88,7 @@ def main() -> int:
 
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
     try:
-        event = build_event(args.key, args.name, args.camera, args.confidence)
+        event = build_event(args.key, args.name, args.camera, args.confidence, args.text)
     except ValueError as e:
         sys.exit(f"Invalid event: {e}")
     if args.dry_run:

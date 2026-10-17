@@ -6,8 +6,11 @@
 #   <ECHO_NOTIFY_ENTITY>  the real entity ID read from Developer Tools > States
 #                         (filter "notify."), e.g. the one ending in _announce or _speak.
 #
-# Incoming text is never spoken. Only message_key selects a template; person_name
-# is sanitised (Unicode word chars, space . ' - only) and truncated.
+# Only message_key selects a template. person_name is sanitised (Unicode word chars,
+# space . ' - only) and truncated. The ONE free-text field that is spoken is custom_text,
+# used only by message_key custom_message: it is written by the owner in the dashboard,
+# validated by the app, and sanitised again here (letters, digits, space . , ! ? : ' -).
+# Quiet hours are enforced by the app (Settings page); the check below is a safety net.
 alias: AI Home Visitor - announce
 description: Receives events from the local Python service and speaks configured templates on the Echo Dot.
 mode: queued
@@ -22,6 +25,9 @@ variables:
   name: >-
     {{ (trigger.json.person_name | default('') | string
         | regex_replace("[^\w .'\-]", "") | truncate(40, True, "")) }}
+  text: >-
+    {{ (trigger.json.custom_text | default('') | string
+        | regex_replace("[^\w .,!?:'\-]", "") | truncate(200, True, "")) }}
   # Stale-event guard: drop events older than 60 s (clock skew tolerant).
   age_s: >-
     {{ (now() - (trigger.json.timestamp | as_datetime)).total_seconds()
@@ -31,12 +37,14 @@ conditions:
   - condition: template
     value_template: >-
       {{ key in ['test_announcement', 'front_door_recognised', 'front_door_unknown',
-                 'front_door_face_not_visible', 'welcome_home', 'camera_offline',
-                 'system_health_warning'] }}
+                 'front_door_face_not_visible', 'welcome_home', 'custom_message',
+                 'camera_offline', 'system_health_warning'] }}
   # Named templates need a usable name.
   - condition: template
     value_template: >-
       {{ key not in ['front_door_recognised', 'welcome_home'] or name | length > 0 }}
+  - condition: template
+    value_template: "{{ key != 'custom_message' or text | length > 0 }}"
   - condition: template
     value_template: "{{ age_s | float(0) < 60 }}"
   # Quiet hours: 22:00-07:00 suppress everything except health warnings.
@@ -59,6 +67,7 @@ actions:
           'front_door_unknown': 'Unknown visitor at the front door.',
           'front_door_face_not_visible': 'Person detected at the front door. Face not visible.',
           'welcome_home': 'Welcome home, ' ~ name ~ '.',
+          'custom_message': text,
           'camera_offline': 'A camera is offline. Please check the system.',
           'system_health_warning': 'Home visitor system health warning. Please check the dashboard.'
         } %}

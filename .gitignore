@@ -27,3 +27,15 @@ dist/
 # VM images
 *.vdi
 *.vdi.zip
+
+# Face models (downloaded by tools/download_models.py)
+models/*.onnx
+models/*.part
+
+# Frontend build/deps
+frontend/node_modules/
+frontend/dist/
+
+# Playwright MCP scratch
+.playwright-mcp/
+frontend/npm-install.log
